@@ -1,155 +1,164 @@
 import streamlit as st
 import pandas as pd
-import altair as alt
 
-st.set_page_config(page_title="MT — Analista Bac Bo", layout="wide")
+# ================= CONFIG =================
+st.set_page_config(page_title="MT Bac Bo", layout="wide")
 
-# ===== ESTILO =====
+# ================= ESTILO =================
 st.markdown("""
 <style>
-.player { color: #1f77ff; font-weight: bold; font-size: 50px; text-align:center;}
-.banker { color: #ff2b2b; font-weight: bold; font-size: 50px; text-align:center;}
-.tie { color: #9b59b6; font-weight: bold; font-size: 50px; text-align:center;}
-.wait { color: #aaaaaa; font-weight: bold; font-size: 50px; text-align:center;}
-button.stButton > button {height: 80px; width: 100%; font-size: 24px;}
-.alerta {background-color: #ffff99; font-weight: bold; font-size:32px; text-align:center; padding:10px; border-radius:10px; animation: blink 1s infinite;}
-.forca-forte {background-color:#00cc00; color:white; font-weight:bold; padding:5px; border-radius:5px;}
-.forca-medio {background-color:#ffcc00; color:white; font-weight:bold; padding:5px; border-radius:5px;}
-.forca-fraco {background-color:#999999; color:white; font-weight:bold; padding:5px; border-radius:5px;}
-@keyframes blink { 50% { opacity: 0; } }
+.big {font-size:38px; font-weight:bold; text-align:center}
+.player {color:#1f77ff}
+.banker {color:#d62728}
+.tie {color:#f1c40f}
+.pause {color:#e67e22}
+.box {padding:12px; border-radius:10px; background:#111}
 </style>
 """, unsafe_allow_html=True)
 
-# ===== ESTADO =====
+# ================= SESSION STATE =================
+def init_state():
+    st.session_state.historico = []
+    st.session_state.total = 0
+    st.session_state.empates = []
+    st.session_state.modo = "DEMO"     # DEMO ou REAL
+    st.session_state.perdas = 0
+    st.session_state.pausa = False
+
 if "historico" not in st.session_state:
-    st.session_state.historico = []
-if "acertos" not in st.session_state:
-    st.session_state.acertos = 0
-if "total_rondas" not in st.session_state:
-    st.session_state.total_rondas = 0
-if "empates" not in st.session_state:
-    st.session_state.empates = []
-if "alerta_tocado" not in st.session_state:
-    st.session_state.alerta_tocado = False
+    init_state()
 
-# ===== FUNÇÕES =====
+# ================= FUNÇÕES =================
+def forca_sinal(hist):
+    if len(hist) < 5:
+        return 0
+    ultimos = hist[-5:]
+    p = ultimos.count("PLAYER")
+    b = ultimos.count("BANKER")
+    return max(p, b) / len(ultimos) * 100
+
 def gerar_sinal(hist):
-    if len(hist) < 3:
-        return "AGUARDAR", "FRACO"
-    if hist[-3:].count("PLAYER") == 3:
-        return "PLAYER", "FORTE"
-    if hist[-3:].count("BANKER") == 3:
-        return "BANKER", "FORTE"
-    if hist[-2:].count("TIE") == 2:
-        return "TIE", "FORTE"
-    return "AGUARDAR", "FRACO"
+    if len(hist) < 4:
+        return "AGUARDAR", 0
 
-def sinal_html(sinal):
-    if sinal == "PLAYER":
-        return '<div class="player">🔵 PLAYER</div>'
-    if sinal == "BANKER":
-        return '<div class="banker">🔴 BANKER</div>'
-    if sinal == "TIE":
-        return '<div class="tie">🟣 TIE</div>'
-    return '<div class="wait">⚪ AGUARDAR</div>'
+    ultimos = hist[-3:]
 
-def forca_html(forca):
-    if forca == "FORTE":
-        return f'<span class="forca-forte">{forca}</span>'
-    if forca == "MÉDIO":
-        return f'<span class="forca-medio">{forca}</span>'
-    return f'<span class="forca-fraco">{forca}</span>'
+    if ultimos.count("PLAYER") >= 2:
+        return "PLAYER", forca_sinal(hist)
 
-def atualizar_acertos(sinal, ultimo_resultado):
-    if sinal in ["PLAYER","BANKER","TIE"] and ultimo_resultado == sinal:
-        st.session_state.acertos += 1
-    st.session_state.total_rondas += 1
+    if ultimos.count("BANKER") >= 2:
+        return "BANKER", forca_sinal(hist)
 
-def tocar_alerta():
-    st.components.v1.html("""
-    <audio autoplay>
-      <source src="https://www.soundjay.com/button/beep-07.wav" type="audio/wav">
-    </audio>
-    <script>
-      let count = 0;
-      let audio = document.querySelector('audio');
-      audio.volume = 1.0;
-      audio.play();
-      audio.onended = function() {
-        count++;
-        if(count < 3) audio.play();
-      }
-    </script>
-    """, height=0, width=0)
+    if ultimos[-1] == "TIE":
+        return "EMPATE", 50
 
-# ===== TÍTULO =====
-st.title("🎲 MT — Painel Profissional Bac Bo")
+    return "AGUARDAR", 0
 
-# ===== BOTÕES DE INSERÇÃO =====
-st.subheader("📥 Inserir resultado da ronda")
-col1, col2, col3 = st.columns(3)
+# ================= TÍTULO =================
+st.title("🤖 MT — Analista Bac Bo")
 
-if col1.button("🔵 PLAYER"):
-    st.session_state.historico.append("PLAYER")
-    atualizar_acertos("PLAYER","PLAYER")
-    st.session_state.alerta_tocado = False
+# ================= POWER =================
+st.markdown("## ⚡ Controlo Geral")
 
-if col2.button("🔴 BANKER"):
-    st.session_state.historico.append("BANKER")
-    atualizar_acertos("BANKER","BANKER")
-    st.session_state.alerta_tocado = False
+c1, c2, c3 = st.columns(3)
 
-if col3.button("🟣 TIE"):
-    st.session_state.historico.append("TIE")
-    atualizar_acertos("TIE","TIE")
-    st.session_state.empates.append(len(st.session_state.historico))
-    st.session_state.alerta_tocado = False
+with c1:
+    if st.button("⚡ POWER / RESET", key="power"):
+        init_state()
+        st.success("✅ MT reiniciado")
 
-# ===== BOTÃO POWER / RESET =====
-if st.button("⚡ POWER / RESET"):
-    st.session_state.historico = []
-    st.session_state.acertos = 0
-    st.session_state.total_rondas = 0
-    st.session_state.empates = []
-    st.session_state.alerta_tocado = False
+with c2:
+    if st.button("🔁 Alternar DEMO / REAL"):
+        st.session_state.modo = "REAL" if st.session_state.modo == "DEMO" else "DEMO"
 
-# ===== MINI-PAINEL =====
+with c3:
+    st.markdown(f"**Modo atual:** `{st.session_state.modo}`")
+
+st.divider()
+
+# ================= INSERÇÃO =================
+st.markdown("## 🎮 Inserir resultado da ronda")
+
+b1, b2, b3 = st.columns(3)
+
+with b1:
+    if st.button("🔵 PLAYER"):
+        st.session_state.historico.append("PLAYER")
+        st.session_state.total += 1
+
+with b2:
+    if st.button("🔴 BANKER"):
+        st.session_state.historico.append("BANKER")
+        st.session_state.total += 1
+
+with b3:
+    if st.button("🟡 EMPATE"):
+        st.session_state.historico.append("TIE")
+        st.session_state.empates.append(st.session_state.total + 1)
+        st.session_state.total += 1
+
+# ================= SINAL =================
 sinal, forca = gerar_sinal(st.session_state.historico)
-st.markdown(f"<div style='font-size:60px; text-align:center;'>{sinal_html(sinal)}</div>", unsafe_allow_html=True)
-st.markdown(f"<div style='text-align:center; font-size:32px;'>{forca_html(forca)}</div>", unsafe_allow_html=True)
 
-if forca in ["FORTE","MÉDIO"] and not st.session_state.alerta_tocado:
-    st.markdown(f'<div class="alerta">🔔 ALERTA: ENTAR {sinal}!</div>', unsafe_allow_html=True)
-    tocar_alerta()
-    st.session_state.alerta_tocado = True
+st.divider()
+st.markdown("## 📢 Sinal Atual")
 
-st.markdown("🟣 **Empates recentes:**")
-st.write(st.session_state.empates[::-1] if st.session_state.empates else "Nenhum empate")
+if st.session_state.pausa:
+    st.markdown("<div class='big pause'>⛔ PAUSA ATIVA</div>", unsafe_allow_html=True)
 
-# ===== ESTATÍSTICAS =====
-taxa = (st.session_state.acertos / st.session_state.total_rondas * 100) if st.session_state.total_rondas>0 else 0
-st.markdown(f"<div style='text-align:center; font-size:20px;'>Total de rondas: {st.session_state.total_rondas} | Acertos: {st.session_state.acertos} | Taxa: {taxa:.2f}%</div>", unsafe_allow_html=True)
+elif sinal == "PLAYER" and forca >= 60:
+    st.markdown(f"<div class='big player'>ENTRAR PLAYER 🔵<br>Força {forca:.0f}% | {st.session_state.modo}</div>", unsafe_allow_html=True)
 
-# ===== HISTÓRICO E GRÁFICO =====
-st.subheader("📊 Histórico e Streaks")
-if st.session_state.historico:
-    df = pd.DataFrame({"Resultado": st.session_state.historico, "Index": range(1, len(st.session_state.historico)+1)})
-    # Gerar sinais em loop seguro
-    sinais = []
-    for i in range(len(st.session_state.historico)):
-        slice_hist = st.session_state.historico[:i+1]
-        sinal_temp,_ = gerar_sinal(slice_hist)
-        sinais.append(sinal_temp)
-    df['Sinal'] = sinais
-    st.table(df[::-1])
-    
-    color_scale = alt.Scale(domain=["PLAYER","BANKER","TIE"], range=["#1f77ff","#ff2b2b","#9b59b6"])
-    chart = alt.Chart(df).mark_circle(size=100).encode(
-        x='Index',
-        y=alt.value(0),
-        color=alt.Color('Resultado', scale=color_scale),
-        tooltip=['Index','Resultado']
-    ).properties(height=50)
-    st.altair_chart(chart, use_container_width=True)
+elif sinal == "BANKER" and forca >= 60:
+    st.markdown(f"<div class='big banker'>ENTRAR BANKER 🔴<br>Força {forca:.0f}% | {st.session_state.modo}</div>", unsafe_allow_html=True)
+
+elif sinal == "EMPATE":
+    st.markdown("<div class='big tie'>EMPATE 🟡</div>", unsafe_allow_html=True)
+
 else:
-    st.write("Nenhum resultado inserido ainda.")
+    st.markdown("<div class='big'>AGUARDAR ⏳</div>", unsafe_allow_html=True)
+
+# ================= CONTROLO DE PERDA =================
+st.divider()
+st.markdown("## 🛑 Controlo de Perdas")
+
+p1, p2 = st.columns(2)
+
+with p1:
+    if st.button("❌ Registrar PERDA"):
+        st.session_state.perdas += 1
+        if st.session_state.perdas >= 2:
+            st.session_state.pausa = True
+
+with p2:
+    if st.button("✅ Registrar GANHO"):
+        st.session_state.perdas = 0
+        st.session_state.pausa = False
+
+# ================= ESTATÍSTICAS =================
+st.divider()
+st.markdown("## 📊 Estatísticas")
+
+e1, e2, e3 = st.columns(3)
+
+with e1:
+    st.metric("🎯 Rondas", st.session_state.total)
+
+with e2:
+    st.metric("🟡 Empates", len(st.session_state.empates))
+
+with e3:
+    st.metric("🧠 Força Atual", f"{forca:.0f}%")
+
+# ================= HISTÓRICO =================
+st.divider()
+st.markdown("## 📜 Histórico")
+
+if st.session_state.historico:
+    df = pd.DataFrame({
+        "Ronda": range(1, len(st.session_state.historico) + 1),
+        "Resultado": st.session_state.historico
+    })
+    st.dataframe(df, use_container_width=True)
+else:
+    st.info("Nenhuma ronda ainda.")
