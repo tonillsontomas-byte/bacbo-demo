@@ -1,23 +1,5 @@
-import streamlit as st
-import random
-import pandas as pd
-from collections import deque
 
-st.set_page_config(
-    page_title="Bac Bo IA - Demo",
-    layout="wide"
-)
-
-if "historico" not in st.session_state:
-    st.session_state.historico = deque(maxlen=30)
-
-def simular_resultado():
-    r = random.random()
-    if r < 0.45:
-        return "BANKER"
-    elif r < 0.90:
-        return "PLAYER"
-    else:
+   else:
         return "TIE"
 
 def gerar_sinal(hist):
@@ -55,13 +37,14 @@ with col2:
     df = pd.DataFrame(
         list(st.session_state.historico),
         columns=["Resultado"]
-    )
+    )ad
     st.table(df[::-1])
 
-    st.subheader("📈 Probabilidades (estimadas)")
+    st.subheader("📈 Probabilidades (estimas)")
     total = max(len(st.session_state.historico), 1)
     st.write("PLAYER:", round(df["Resultado"].tolist().count("PLAYER")/total*100,1), "%")
     st.write("BANKER:", round(df["Resultado"].tolist().count("BANKER")/total*100,1), "%")
     st.write("TIE:", round(df["Resultado"].tolist().count("TIE")/total*100,1), "%")
 
 st.caption("Modo DEMO • Preparado para ligação ao cassino real")
+ 
