@@ -1,6 +1,5 @@
-import streamlit as st
+  import streamlit as st
 import pandas as pd
-from collections import deque
 import altair as alt
 
 st.set_page_config(page_title="MT — Analista Bac Bo", layout="wide")
@@ -13,40 +12,36 @@ st.markdown("""
 .tie { color: #9b59b6; font-weight: bold; font-size: 50px; text-align:center;}
 .wait { color: #aaaaaa; font-weight: bold; font-size: 50px; text-align:center;}
 button.stButton > button {height: 80px; width: 100%; font-size: 24px;}
-.alerta {background-color: #ffff99; font-weight: bold; font-size:28px; text-align:center; padding:10px; border-radius:10px; animation: blink 1s infinite;}
-.table-cell {font-size: 20px;}
+.alerta {background-color: #ffff99; font-weight: bold; font-size:32px; text-align:center; padding:10px; border-radius:10px; animation: blink 1s infinite;}
+.forca-forte {background-color:#00cc00; color:white; font-weight:bold; padding:5px; border-radius:5px;}
+.forca-medio {background-color:#ffcc00; color:white; font-weight:bold; padding:5px; border-radius:5px;}
+.forca-fraco {background-color:#999999; color:white; font-weight:bold; padding:5px; border-radius:5px;}
 @keyframes blink { 50% { opacity: 0; } }
 </style>
 """, unsafe_allow_html=True)
 
 # ===== ESTADO =====
 if "historico" not in st.session_state:
-    st.session_state.historico = deque(maxlen=100)
+    st.session_state.historico = []
 if "acertos" not in st.session_state:
     st.session_state.acertos = 0
 if "total_rondas" not in st.session_state:
     st.session_state.total_rondas = 0
 if "empates" not in st.session_state:
     st.session_state.empates = []
+if "alerta_tocado" not in st.session_state:
+    st.session_state.alerta_tocado = False
 
 # ===== FUNÇÕES =====
 def gerar_sinal(hist):
-    if len(hist) < 5:
+    if len(hist) < 3:
         return "AGUARDAR", "FRACO"
-    # Sinais fortes por sequência
     if hist[-3:].count("PLAYER") == 3:
         return "PLAYER", "FORTE"
     if hist[-3:].count("BANKER") == 3:
         return "BANKER", "FORTE"
     if hist[-2:].count("TIE") == 2:
         return "TIE", "FORTE"
-    # Sinais médios por contagem
-    if hist.count("PLAYER") >= 3:
-        return "PLAYER", "MÉDIO"
-    if hist.count("BANKER") >= 3:
-        return "BANKER", "MÉDIO"
-    if hist.count("TIE") >= 2:
-        return "TIE", "MÉDIO"
     return "AGUARDAR", "FRACO"
 
 def sinal_html(sinal):
@@ -58,81 +53,103 @@ def sinal_html(sinal):
         return '<div class="tie">🟣 TIE</div>'
     return '<div class="wait">⚪ AGUARDAR</div>'
 
+def forca_html(forca):
+    if forca == "FORTE":
+        return f'<span class="forca-forte">{forca}</span>'
+    if forca == "MÉDIO":
+        return f'<span class="forca-medio">{forca}</span>'
+    return f'<span class="forca-fraco">{forca}</span>'
+
 def atualizar_acertos(sinal, ultimo_resultado):
     if sinal in ["PLAYER","BANKER","TIE"] and ultimo_resultado == sinal:
         st.session_state.acertos += 1
     st.session_state.total_rondas += 1
 
-# ===== TÍTULO =====
-st.title("🎲 MT — Bot Analista Externo Bac Bo")
+def tocar_alerta():
+    st.components.v1.html("""
+    <audio autoplay>
+      <source src="https://www.soundjay.com/button/beep-07.wav" type="audio/wav">
+    </audio>
+    <script>
+      let count = 0;
+      let audio = document.querySelector('audio');
+      audio.volume = 1.0;
+      audio.play();
+      audio.onended = function() {
+        count++;
+        if(count < 3) audio.play();
+      }
+    </script>
+    """, height=0, width=0)
 
-# ===== BOTÕES =====
+# ===== TÍTULO =====
+st.title("🎲 MT — Painel Profissional Bac Bo")
+
+# ===== BOTÕES DE INSERÇÃO =====
 st.subheader("📥 Inserir resultado da ronda")
 col1, col2, col3 = st.columns(3)
 
-with col1:
-    if st.button("🔵 PLAYER"):
-        st.session_state.historico.append("PLAYER")
-        atualizar_acertos("PLAYER", "PLAYER")
+if col1.button("🔵 PLAYER"):
+    st.session_state.historico.append("PLAYER")
+    atualizar_acertos("PLAYER","PLAYER")
+    st.session_state.alerta_tocado = False
 
-with col2:
-    if st.button("🔴 BANKER"):
-        st.session_state.historico.append("BANKER")
-        atualizar_acertos("BANKER", "BANKER")
+if col2.button("🔴 BANKER"):
+    st.session_state.historico.append("BANKER")
+    atualizar_acertos("BANKER","BANKER")
+    st.session_state.alerta_tocado = False
 
-with col3:
-    if st.button("🟣 TIE"):
-        st.session_state.historico.append("TIE")
-        atualizar_acertos("TIE", "TIE")
-        st.session_state.empates.append(len(st.session_state.historico))
+if col3.button("🟣 TIE"):
+    st.session_state.historico.append("TIE")
+    atualizar_acertos("TIE","TIE")
+    st.session_state.empates.append(len(st.session_state.historico))
+    st.session_state.alerta_tocado = False
 
-# ===== SINAL ATUAL =====
-sinal, forca = gerar_sinal(list(st.session_state.historico))
-st.subheader("🔔 SINAL ATUAL")
-st.markdown(sinal_html(sinal), unsafe_allow_html=True)
+# ===== BOTÃO POWER / RESET =====
+if st.button("⚡ POWER / RESET"):
+    st.session_state.historico = []
+    st.session_state.acertos = 0
+    st.session_state.total_rondas = 0
+    st.session_state.empates = []
+    st.session_state.alerta_tocado = False
 
-# ===== ALERTA =====
-if forca in ["MÉDIO","FORTE"] and sinal != "AGUARDAR":
+# ===== MINI-PAINEL =====
+sinal, forca = gerar_sinal(st.session_state.historico)
+st.markdown(f"<div style='font-size:60px; text-align:center;'>{sinal_html(sinal)}</div>", unsafe_allow_html=True)
+st.markdown(f"<div style='text-align:center; font-size:32px;'>{forca_html(forca)}</div>", unsafe_allow_html=True)
+
+if forca in ["FORTE","MÉDIO"] and not st.session_state.alerta_tocado:
     st.markdown(f'<div class="alerta">🔔 ALERTA: ENTAR {sinal}!</div>', unsafe_allow_html=True)
+    tocar_alerta()
+    st.session_state.alerta_tocado = True
 
-# ===== HISTÓRICO E TABELA RÁPIDA =====
-st.subheader("📊 Histórico e Sinais (Tabela rápida)")
-df = pd.DataFrame(list(st.session_state.historico), columns=["Resultado"])
-df['Index'] = range(1, len(df)+1)
-df['Sinal'] = [gerar_sinal(list(st.session_state.historico[:i]))[0] for i in range(1, len(df)+1)]
-df['Força'] = [gerar_sinal(list(st.session_state.historico[:i]))[1] for i in range(1, len(df)+1)]
-st.table(df[::-1])
-
-# ===== LISTA DE EMPATES =====
-st.subheader("🟣 Lista de Empates (posição)")
-if st.session_state.empates:
-    st.write(st.session_state.empates[::-1])
-else:
-    st.write("Nenhum empate até agora")
+st.markdown("🟣 **Empates recentes:**")
+st.write(st.session_state.empates[::-1] if st.session_state.empates else "Nenhum empate")
 
 # ===== ESTATÍSTICAS =====
-st.subheader("📈 Estatísticas")
-if st.session_state.total_rondas > 0:
-    taxa = (st.session_state.acertos / st.session_state.total_rondas) * 100
-else:
-    taxa = 0
-st.write(f"Total de rondas: **{st.session_state.total_rondas}**")
-st.write(f"Acertos: **{st.session_state.acertos}**")
-st.write(f"Taxa de acerto: **{taxa:.2f}%**")
+taxa = (st.session_state.acertos / st.session_state.total_rondas * 100) if st.session_state.total_rondas>0 else 0
+st.markdown(f"<div style='text-align:center; font-size:20px;'>Total de rondas: {st.session_state.total_rondas} | Acertos: {st.session_state.acertos} | Taxa: {taxa:.2f}%</div>", unsafe_allow_html=True)
 
-# ===== GRÁFICO DE STREAKS =====
-st.subheader("📊 Gráfico de Sequência (Streaks)")
-if len(st.session_state.historico) > 0:
-    df_chart = pd.DataFrame(list(st.session_state.historico), columns=["Resultado"])
-    df_chart['Index'] = range(1, len(df_chart)+1)
+# ===== HISTÓRICO E GRÁFICO =====
+st.subheader("📊 Histórico e Streaks")
+if st.session_state.historico:
+    df = pd.DataFrame({"Resultado": st.session_state.historico, "Index": range(1, len(st.session_state.historico)+1)})
+    # Gerar sinais em loop seguro
+    sinais = []
+    for i in range(len(st.session_state.historico)):
+        slice_hist = st.session_state.historico[:i+1]
+        sinal_temp,_ = gerar_sinal(slice_hist)
+        sinais.append(sinal_temp)
+    df['Sinal'] = sinais
+    st.table(df[::-1])
+    
     color_scale = alt.Scale(domain=["PLAYER","BANKER","TIE"], range=["#1f77ff","#ff2b2b","#9b59b6"])
-    chart = alt.Chart(df_chart).mark_circle(size=100).encode(
+    chart = alt.Chart(df).mark_circle(size=100).encode(
         x='Index',
         y=alt.value(0),
         color=alt.Color('Resultado', scale=color_scale),
         tooltip=['Index','Resultado']
     ).properties(height=50)
     st.altair_chart(chart, use_container_width=True)
-
-# ===== RODAPÉ =====
-st.caption("Modo Analista Externo MT • Decisão final é sempre tua")
+else:
+    st.write("Nenhum resultado inserido ainda.")
