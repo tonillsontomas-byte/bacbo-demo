@@ -2,6 +2,6 @@ streamlit
 pandas
 opencv-python
 pillow
-ultralytics
+pytesseract
 numpy
 playsound
