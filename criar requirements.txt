@@ -1,3 +1,7 @@
 streamlit
-numpy
 pandas
+opencv-python
+pillow
+ultralytics
+numpy
+playsound
